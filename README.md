@@ -48,7 +48,7 @@ patches, so there's no hydration step and the two renderings can't drift apart.
 
 ## Deployment
 
-Coolify on hub builds the Dockerfile from `main` through the shared Forgejo
+Coolify on hub builds the Dockerfile from `master` through the shared Forgejo
 bridge. Push deployments serve https://domains.peterszarvas.hu/domains on
 container port 8080; `/domains` is the health check. The app has no persistent
 data or required environment variables. Domain results are simulated.
