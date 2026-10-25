@@ -1,0 +1,47 @@
+{{define "page"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if .Q}}{{.Q}} · {{end}}Domain search · Datastar demo</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"></script>
+</head>
+<body>
+  <main id="app" class="{{if .Q}}searching{{end}}"
+        data-signals="{q: {{json .Q}}, _pending: false}"
+        data-class="{searching: $q.trim() != '', pending: $_pending}">
+    <h1 class="hero">Find your domain</h1>
+
+    <form class="search" role="search" action="/domains/search" data-on:submit="$q.trim() && @get('/api/search')">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" name="q" type="search" value="{{.Q}}" maxlength="100"
+             placeholder="Search a domain or describe your idea"
+             autocomplete="off" spellcheck="false" autofocus
+             data-bind:q
+             data-indicator="_searching"
+             data-on:input="$_pending = $q.trim() != ''"
+             data-on:input__debounce.300ms="$q.trim() ? @get('/api/search') : history.replaceState(null, '', '/domains')">
+      <span class="spinner" data-show="$_searching" style="display:none" aria-hidden="true"></span>
+    </form>
+
+    <p id="empty" class="empty">Begin your search</p>
+
+    {{template "results" .Results}}
+
+    {{if .Q}}<div id="boot" data-indicator="_searching" data-init="@get('/api/search')"></div>{{end}}
+  </main>
+</body>
+</html>{{end}}
+
+{{define "results"}}<section id="results" aria-live="polite">{{if .}}
+  <h2>Top results</h2>
+  <div class="grid">{{range .Top}}{{template "row" .}}{{end}}</div>
+  <h2>All results</h2>
+  <div class="list">{{range .All}}{{template "row" .}}{{end}}</div>
+{{end}}</section>{{end}}
+
+{{define "row"}}<div id="{{.ID}}" class="row {{.Status}}">
+  <span class="domain" title="{{.Name}}.{{.TLD}}"><span class="label">{{.Short}}</span><span class="tld">.{{.TLD}}</span></span>
+  <span class="status">{{if eq .Status "available"}}<span class="price">{{.Price}}<small>/yr</small></span><span class="badge">Available</span>{{else if eq .Status "taken"}}<span class="badge">Taken</span>{{else}}<span class="skeleton"></span>{{end}}</span>
+</div>{{end}}
