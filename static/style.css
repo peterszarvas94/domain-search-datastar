@@ -42,3 +42,5 @@ main.pending .domain { opacity:.5; }
 @media (max-width:520px) { .grid { grid-template-columns:1fr; } .hero { font-size:30px; } }
 
 .lookup-note { color:var(--muted); font-size:12px; text-align:center; margin:16px 0 0; }
+.show-more { display:block; margin:20px auto 32px; padding:10px 18px; background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:8px; font:inherit; cursor:pointer; }
+.show-more:disabled { opacity:.5; cursor:wait; }

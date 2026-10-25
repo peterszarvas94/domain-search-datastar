@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,8 +30,9 @@ var tpl = template.Must(template.New("").Funcs(template.FuncMap{
 }).ParseFS(tplFS, "templates/*.html"))
 
 var (
-	topTLDs = []string{"com", "dev", "app", "io"}
-	allTLDs = []string{"net", "org", "ai", "co", "xyz", "sh", "so", "site"}
+	topTLDs   = []string{"com", "dev", "app", "io"}
+	allTLDs   = []string{"net", "org", "ai", "co", "xyz", "sh", "so", "site"}
+	extraTLDs = strings.Fields("online tech store shop cloud design studio digital agency solutions software systems network website space world today live life news media social video games devtools blog pro info biz me tv cc us uk de fr nl eu ca au ch at be it es pl cz se no fi dk in jp nz za club art ink app bio cafe center city click codes company computer consulting cool email events expert finance fun global group guide guru host hosting house land link ltd marketing mobi money name ninja one page photography photos pics press rocks services show tips tools top travel work works zone academy business capital chat community education engineering equipment exchange express family fashion financial fitness foundation fund gallery graphics health help international law legal management market partners plus production properties pub rentals restaurant reviews run sale school science security shoes shopping site soccer space support team technology training university ventures website wiki win wine yoga")
 )
 
 const maxQueryLen = 100 // raw text kept in the input / URL
@@ -45,14 +47,17 @@ type Row struct {
 
 // Results is everything the results area needs; rendered by SSR and by the SSE handler alike.
 type Results struct {
-	Name     string
-	Top, All []Row
+	Name      string
+	Top, All  []Row
+	HasMore   bool
+	NextLimit int
 }
 
 // Page is the full document model.
 type Page struct {
 	Q       string // raw query, prefilled into the input
 	Results *Results
+	Limit   int
 }
 
 // sanitize turns free text ("My Cool Idea!", "Foo.com") into a DNS label ("mycoolidea", "foo").
@@ -93,19 +98,68 @@ func truncateMiddle(s string, max int) string {
 }
 
 func newRow(name, tld string) Row {
-	return Row{ID: "row-" + tld, Name: name, Short: truncateMiddle(name, 22), TLD: tld}
+	return Row{ID: "row-" + strings.ReplaceAll(tld, ".", "-"), Name: name, Short: truncateMiddle(name, 22), TLD: tld}
 }
 
-func newResults(name string) *Results {
+func newResults(query string) *Results {
+	return resultsWithLimit(query, 12)
+}
+
+func resultsWithLimit(query string, limit int) *Results {
+	if limit < 12 {
+		limit = 12
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	name := sanitize(query)
 	if name == "" {
 		return nil
 	}
 	r := &Results{Name: name}
+	// Keep a typed extension first, even when it is outside our suggestions.
+	_, suffix, exact := strings.Cut(strings.TrimSuffix(strings.ToLower(strings.TrimSpace(query)), "."), ".")
+	if exact {
+		for _, label := range strings.Split(suffix, ".") {
+			if label == "" || sanitize(label) != label {
+				exact = false
+				break
+			}
+		}
+	}
+	if exact {
+		r.Top = append(r.Top, newRow(name, suffix))
+	}
 	for _, t := range topTLDs {
+		if exact && t == suffix {
+			continue
+		}
 		r.Top = append(r.Top, newRow(name, t))
 	}
 	for _, t := range allTLDs {
+		if exact && t == suffix {
+			continue
+		}
 		r.All = append(r.All, newRow(name, t))
+	}
+	seen := make(map[string]bool)
+	for _, row := range append(append([]Row{}, r.Top...), r.All...) {
+		seen[row.TLD] = true
+	}
+	for _, t := range extraTLDs {
+		if seen[t] {
+			continue
+		}
+		if _, supported := registry.endpoints[t]; !supported {
+			continue
+		}
+		seen[t] = true
+		r.All = append(r.All, newRow(name, t))
+	}
+	if keep := limit - len(r.Top); keep < len(r.All) {
+		r.All = r.All[:keep]
+		r.HasMore = true
+		r.NextLimit = limit + 12
 	}
 	return r
 }
@@ -131,7 +185,11 @@ func pageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tpl.ExecuteTemplate(w, "page", Page{Q: q, Results: newResults(sanitize(q))}); err != nil {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit < 12 || limit > 200 {
+		limit = 12
+	}
+	if err := tpl.ExecuteTemplate(w, "page", Page{Q: q, Results: resultsWithLimit(q, limit), Limit: limit}); err != nil {
 		log.Printf("page: %v", err)
 	}
 }
@@ -142,7 +200,8 @@ var activeSearches atomic.Int64
 // newer @get to the same URL starts, which cancels r.Context() here and stops every pending lookup.
 func searchHandler(w http.ResponseWriter, r *http.Request) {
 	var signals struct {
-		Q string `json:"q"`
+		Q     string `json:"q"`
+		Limit int    `json:"limit"`
 	}
 	if err := datastar.ReadSignals(r, &signals); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -162,9 +221,13 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1) Instantly: every row with a skeleton status, plus URL sync. Stable ids => morph, not re-create.
-	res := newResults(name)
+	res := resultsWithLimit(q, signals.Limit)
 	sse.PatchElements(render("results", res))
-	sse.ReplaceURL(url.URL{Path: "/domains/search", RawQuery: url.Values{"q": {q}}.Encode()})
+	values := url.Values{"q": {q}}
+	if signals.Limit > 12 && signals.Limit <= 200 {
+		values.Set("limit", strconv.Itoa(signals.Limit))
+	}
+	sse.ReplaceURL(url.URL{Path: "/domains/search", RawQuery: values.Encode()})
 	sse.PatchSignals([]byte(`{"_pending":false}`))
 
 	// 2) Concurrently query RDAP for each TLD, patching only that row as it resolves.
