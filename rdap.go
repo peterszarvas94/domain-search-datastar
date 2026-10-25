@@ -60,7 +60,11 @@ var registry = newRegistry()
 
 func (registry *rdapRegistry) lookup(ctx context.Context, row Row) Row {
 	row.Status = "unknown"
-	endpoint, ok := registry.endpoints[row.TLD]
+	tld := row.TLD
+	if dot := strings.LastIndexByte(tld, '.'); dot >= 0 {
+		tld = tld[dot+1:]
+	}
+	endpoint, ok := registry.endpoints[tld]
 	if !ok {
 		return row
 	}
