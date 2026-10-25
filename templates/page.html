@@ -25,6 +25,8 @@
       <span class="spinner" data-show="$_searching" style="display:none" aria-hidden="true"></span>
     </form>
 
+    <p class="lookup-note">Live registry lookups. “Not found” does not guarantee a domain can be registered. Some extensions may be unavailable.</p>
+
     <p id="empty" class="empty">Begin your search</p>
 
     {{template "results" .Results}}
@@ -43,5 +45,5 @@
 
 {{define "row"}}<div id="{{.ID}}" class="row {{.Status}}">
   <span class="domain" title="{{.Name}}.{{.TLD}}"><span class="label">{{.Short}}</span><span class="tld">.{{.TLD}}</span></span>
-  <span class="status">{{if eq .Status "available"}}<span class="price">{{.Price}}<small>/yr</small></span><span class="badge">Available</span>{{else if eq .Status "taken"}}<span class="badge">Taken</span>{{else}}<span class="skeleton"></span>{{end}}</span>
+  <span class="status">{{if eq .Status "not-found"}}<span class="badge">Not found</span>{{else if eq .Status "registered"}}<span class="badge">Registered</span>{{else if eq .Status "unknown"}}<span class="badge">Unknown</span>{{else}}<span class="skeleton" role="status" aria-label="Checking registration"></span>{{end}}</span>
 </div>{{end}}

@@ -29,10 +29,9 @@ h2 { font-size:13px; font-weight:500; color:var(--muted); margin:28px 0 10px; }
 .label { overflow:hidden; text-overflow:ellipsis; }
 .tld { flex-shrink:0; color:var(--muted); }
 .status { display:flex; align-items:center; gap:10px; flex-shrink:0; font-size:13px; }
-.price small { color:var(--muted); }
 .badge { padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--muted); }
-.available .badge { color:var(--ok); border-color:#166534; }
-.taken .domain { color:var(--muted); text-decoration:line-through; text-decoration-color:#555; }
+.not-found .badge { color:var(--ok); border-color:#166534; }
+.registered .domain { color:var(--muted); text-decoration:line-through; text-decoration-color:#555; }
 
 .skeleton { display:block; width:96px; height:16px; border-radius:6px; background:linear-gradient(90deg,#1a1a1a 25%,#262626 50%,#1a1a1a 75%); background-size:200% 100%; animation:shimmer 1.2s infinite; }
 @keyframes shimmer { to { background-position:-200% 0; } }
@@ -41,3 +40,5 @@ main.pending .status > * { display:none; }
 main.pending .status::before { content:""; display:block; width:96px; height:16px; border-radius:6px; background:linear-gradient(90deg,#1a1a1a 25%,#262626 50%,#1a1a1a 75%); background-size:200% 100%; animation:shimmer 1.2s infinite; }
 main.pending .domain { opacity:.5; }
 @media (max-width:520px) { .grid { grid-template-columns:1fr; } .hero { font-size:30px; } }
+
+.lookup-note { color:var(--muted); font-size:12px; text-align:center; margin:16px 0 0; }

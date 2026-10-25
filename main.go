@@ -1,4 +1,4 @@
-// Datastar domain search demo: mock registry + artificial latency, streamed over one SSE response.
+// Datastar domain search demo: real RDAP registration lookups streamed over SSE.
 package main
 
 import (
@@ -6,11 +6,8 @@ import (
 	"embed"
 	"encoding/json"
 	"flag"
-	"fmt"
-	"hash/fnv"
 	"html/template"
 	"log"
-	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strings"
@@ -34,8 +31,6 @@ var tpl = template.Must(template.New("").Funcs(template.FuncMap{
 var (
 	topTLDs = []string{"com", "dev", "app", "io"}
 	allTLDs = []string{"net", "org", "ai", "co", "xyz", "sh", "so", "site"}
-	// Names that are always taken on .com, regardless of the hash.
-	reservedCom = map[string]bool{"google": true, "vercel": true, "apple": true}
 )
 
 const maxQueryLen = 100 // raw text kept in the input / URL
@@ -43,9 +38,9 @@ const maxNameLen = 63   // DNS label limit
 
 // ---- domain model -------------------------------------------------------
 
-// Row is one domain line. Status is "" while the (fake) registry lookup is in flight.
+// Row is one domain line. Status is "" while the registry lookup is in flight.
 type Row struct {
-	ID, Name, Short, TLD, Status, Price string
+	ID, Name, Short, TLD, Status string
 }
 
 // Results is everything the results area needs; rendered by SSR and by the SSE handler alike.
@@ -115,24 +110,6 @@ func newResults(name string) *Results {
 	return r
 }
 
-// lookup is the deterministic mock registry: same name+tld => same answer, every time.
-func lookup(row Row) Row {
-	h := fnv.New32a()
-	h.Write([]byte(row.Name + "." + row.TLD))
-	v := h.Sum32()
-	taken := v%100 < 35 || (row.TLD == "com" && (reservedCom[row.Name] || len(row.Name) <= 3))
-	if taken {
-		row.Status = "taken"
-		return row
-	}
-	base := map[string]int{"com": 1125, "dev": 1500, "app": 1600, "io": 4600, "net": 1350, "org": 1000,
-		"ai": 8000, "co": 2800, "xyz": 1200, "sh": 4800, "so": 3600, "site": 300}[row.TLD]
-	cents := base + int(v>>8)%(base/2+1)
-	row.Status = "available"
-	row.Price = fmt.Sprintf("$%d.%02d", cents/100, cents%100)
-	return row
-}
-
 // ---- rendering ------------------------------------------------------------
 
 func render(name string, data any) string {
@@ -184,13 +161,13 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1) Instantly: every row with a skeleton price, plus URL sync. Stable ids => morph, not re-create.
+	// 1) Instantly: every row with a skeleton status, plus URL sync. Stable ids => morph, not re-create.
 	res := newResults(name)
 	sse.PatchElements(render("results", res))
 	sse.ReplaceURL(url.URL{Path: "/domains/search", RawQuery: url.Values{"q": {q}}.Encode()})
 	sse.PatchSignals([]byte(`{"_pending":false}`))
 
-	// 2) Concurrently "ask the registry" for each TLD, patching only that row as it resolves.
+	// 2) Concurrently query RDAP for each TLD, patching only that row as it resolves.
 	n := activeSearches.Add(1)
 	defer activeSearches.Add(-1)
 	start := time.Now()
@@ -203,13 +180,11 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(row Row) {
 			defer wg.Done()
-			delay := time.Duration(200+rand.IntN(1300)) * time.Millisecond // fake network latency
-			select {
-			case <-ctx.Done():
-				return // client typed again / navigated away: stop the "remote" call
-			case <-time.After(delay):
+			result := registry.lookup(ctx, row)
+			if ctx.Err() != nil {
+				return
 			}
-			if err := sse.PatchElements(render("row", lookup(row))); err == nil {
+			if err := sse.PatchElements(render("row", result)); err == nil {
 				done.Add(1)
 			}
 		}(row)
