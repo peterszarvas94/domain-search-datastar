@@ -13,7 +13,7 @@
         data-class="{searching: $q.trim() != '', pending: $_pending}">
     <h1 class="hero">Find your domain</h1>
 
-    <form class="search" role="search" action="/domains/search" data-on:submit="$q.trim() && @get('/api/search')">
+    <form class="search" role="search" action="/domains/search" data-on:submit="{{template "sync-url"}} $q.trim() && @get('/api/search')">
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" name="q" type="search" value="{{.Q}}" maxlength="100"
              placeholder="Search a domain or describe your idea"
@@ -21,7 +21,7 @@
              data-bind:q
              data-indicator="_searching"
              data-on:input="$limit = 12; $_pending = $q.trim() != ''"
-             data-on:input__debounce.300ms="$q.trim() ? @get('/api/search') : history.replaceState(null, '', '/domains')">
+             data-on:input__debounce.300ms="{{template "sync-url"}} $q.trim() && @get('/api/search')">
       <span class="spinner" data-show="$_searching || $_expanding" style="display:none" aria-hidden="true"></span>
     </form>
 
@@ -46,7 +46,9 @@
 
 {{define "rows"}}{{range .}}{{template "row" .}}{{end}}{{end}}
 
-{{define "show-more"}}<button id="show-more" class="show-more" type="button" data-indicator="_expanding" data-show="{{.HasMore}}" {{if not .HasMore}}style="display:none"{{end}} data-attr:disabled="$_searching || $_expanding || $_pending" data-on:click="$limit = {{.NextLimit}}; @get('/api/search', {payload: {q: $q, limit: $limit, offset: {{.Count}}}})">Show 12 more extensions</button>{{end}}
+{{define "sync-url"}}history.replaceState(null, '', $q.trim() ? '/domains/search?' + new URLSearchParams($limit > 12 ? {q: $q.trim(), limit: $limit} : {q: $q.trim()}) : '/domains');{{end}}
+
+{{define "show-more"}}<button id="show-more" class="show-more" type="button" data-indicator="_expanding" data-show="{{.HasMore}}" {{if not .HasMore}}style="display:none"{{end}} data-attr:disabled="$_searching || $_expanding || $_pending" data-on:click="$limit = {{.NextLimit}}; {{template "sync-url"}} @get('/api/search', {payload: {q: $q, limit: $limit, offset: {{.Count}}}})">Show 12 more extensions</button>{{end}}
 
 {{define "row"}}<div id="{{.ID}}" class="row {{.Status}}">
   <span class="domain" title="{{.Name}}.{{.TLD}}"><span class="label">{{.Short}}</span><span class="tld">.{{.TLD}}</span></span>

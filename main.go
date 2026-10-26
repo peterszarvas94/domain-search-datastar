@@ -224,7 +224,6 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 
 	if name == "" { // the client doesn't request on empty input, but stay correct if it does
 		sse.PatchElements(render("results", nil))
-		sse.ReplaceURL(url.URL{Path: "/domains"})
 		sse.PatchSignals([]byte(`{"_pending":false}`))
 		return
 	}
@@ -244,11 +243,6 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 		sse.PatchElements(render("rows", rows), datastar.WithSelector("#all-results"), datastar.WithMode(datastar.ElementPatchModeAppend))
 		sse.PatchElements(render("show-more", res))
 	}
-	values := url.Values{"q": {q}}
-	if signals.Limit > 12 && signals.Limit <= 200 {
-		values.Set("limit", strconv.Itoa(signals.Limit))
-	}
-	sse.ReplaceURL(url.URL{Path: "/domains/search", RawQuery: values.Encode()})
 	sse.PatchSignals([]byte(`{"_pending":false}`))
 
 	// 2) Concurrently query RDAP for each TLD, patching only that row as it resolves.
