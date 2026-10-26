@@ -101,7 +101,7 @@ func (registry *rdapRegistry) lookup(ctx context.Context, row Row) Row {
 		return row
 	}
 	request.Header.Set("Accept", "application/rdap+json")
-	request.Header.Set("User-Agent", "domain-search-datastar/1.0 (+https://domains.peterszarvas.hu)")
+	request.Header.Set("User-Agent", "domain-search-datastar/1.0")
 	response, err := registry.client.Do(request)
 	if err != nil {
 		return row

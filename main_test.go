@@ -7,7 +7,7 @@ import (
 )
 
 func TestExactDomainComesFirst(t *testing.T) {
-	for _, query := range []string{"peterszarvas.computer", "Peterszarvas.COM", "peterszarvas.xyz", "peterszarvas.co.uk"} {
+	for _, query := range []string{"example.computer", "Example.COM", "example.xyz", "example.co.uk"} {
 		t.Run(query, func(t *testing.T) {
 			results := newResults(query)
 			first := results.Top[0]
@@ -41,9 +41,9 @@ func TestSearchSuggestionsStillWork(t *testing.T) {
 }
 
 func TestExpandedExtensions(t *testing.T) {
-	first := resultsWithLimit("peterszarvas.computer", 12)
-	more := resultsWithLimit("peterszarvas.computer", 24)
-	all := resultsWithLimit("peterszarvas.computer", 200)
+	first := resultsWithLimit("example.computer", 12)
+	more := resultsWithLimit("example.computer", 24)
+	all := resultsWithLimit("example.computer", 200)
 	if len(first.Top)+len(first.All) != 12 || len(more.Top)+len(more.All) != 24 {
 		t.Fatal("batch size ignored")
 	}

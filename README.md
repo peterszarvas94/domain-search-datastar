@@ -30,12 +30,19 @@ curl -fsS https://data.iana.org/rdap/dns.json -o rdap-bootstrap.json
 
 ## Deployment
 
-Coolify on hub builds the Dockerfile from `master` through the shared Forgejo
-bridge. Push deployments serve https://domains.peterszarvas.hu/domains on
-container port 8080; `/domains` is the health check. No persistent data or
-required environment variables.
+Build and run the included Docker image:
 
-An exact domain such as `peterszarvas.computer` appears first, followed by
+```bash
+docker build -t domain-search-demo .
+docker run --rm -p 8080:8080 domain-search-demo
+# Open http://localhost:8080/domains
+```
+
+The container listens on port 8080; `/domains` can be used as a health check.
+No persistent storage or environment variables are required. When deploying
+publicly, put the service behind an HTTPS reverse proxy.
+
+An exact domain such as `example.computer` appears first, followed by
 alternative extensions. Typed extensions are preserved even outside the default
 suggestion list. Multi-label suffixes such as `.co.uk` use the final TLD's RDAP
 service. Unsupported registries show Unknown rather than omitting the domain.
