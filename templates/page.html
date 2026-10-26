@@ -9,7 +9,7 @@
 </head>
 <body>
   <main id="app" class="{{if .Q}}searching{{end}}"
-        data-signals="{q: {{json .Q}}, _pending: false, limit: {{.Limit}}}"
+        data-signals="{q: {{json .Q}}, _pending: false, _expanding: false, limit: {{.Limit}}}"
         data-class="{searching: $q.trim() != '', pending: $_pending}">
     <h1 class="hero">Find your domain</h1>
 
@@ -22,7 +22,7 @@
              data-indicator="_searching"
              data-on:input="$limit = 12; $_pending = $q.trim() != ''"
              data-on:input__debounce.300ms="$q.trim() ? @get('/api/search') : history.replaceState(null, '', '/domains')">
-      <span class="spinner" data-show="$_searching" style="display:none" aria-hidden="true"></span>
+      <span class="spinner" data-show="$_searching || $_expanding" style="display:none" aria-hidden="true"></span>
     </form>
 
     <p class="lookup-note">Live registry lookups. “Available” means no registration was found; confirm availability with a registrar. Some extensions may be unavailable.</p>
@@ -40,9 +40,13 @@
   <h2>Top results</h2>
   <div class="grid">{{range .Top}}{{template "row" .}}{{end}}</div>
   <h2>All results</h2>
-  <div class="list">{{range .All}}{{template "row" .}}{{end}}</div>
-  {{if .HasMore}}<button class="show-more" type="button" data-indicator="_searching" data-attr:disabled="$_searching || $_pending" data-on:click="$limit = {{.NextLimit}}; @get('/api/search')">Show 12 more extensions</button>{{end}}
+  <div id="all-results" class="list">{{template "rows" .All}}</div>
+  {{template "show-more" .}}
 {{end}}</section>{{end}}
+
+{{define "rows"}}{{range .}}{{template "row" .}}{{end}}{{end}}
+
+{{define "show-more"}}<button id="show-more" class="show-more" type="button" data-indicator="_expanding" data-show="{{.HasMore}}" {{if not .HasMore}}style="display:none"{{end}} data-attr:disabled="$_searching || $_expanding || $_pending" data-on:click="$limit = {{.NextLimit}}; @get('/api/search', {payload: {q: $q, limit: $limit, offset: {{.Count}}}})">Show 12 more extensions</button>{{end}}
 
 {{define "row"}}<div id="{{.ID}}" class="row {{.Status}}">
   <span class="domain" title="{{.Name}}.{{.TLD}}"><span class="label">{{.Short}}</span><span class="tld">.{{.TLD}}</span></span>
