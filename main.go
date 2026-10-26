@@ -53,6 +53,8 @@ type Results struct {
 	NextLimit int
 }
 
+func (r *Results) Count() int { return len(r.Top) + len(r.All) }
+
 // Page is the full document model.
 type Page struct {
 	Q       string // raw query, prefilled into the input
@@ -200,8 +202,9 @@ var activeSearches atomic.Int64
 // newer @get to the same URL starts, which cancels r.Context() here and stops every pending lookup.
 func searchHandler(w http.ResponseWriter, r *http.Request) {
 	var signals struct {
-		Q     string `json:"q"`
-		Limit int    `json:"limit"`
+		Q      string `json:"q"`
+		Limit  int    `json:"limit"`
+		Offset int    `json:"offset"`
 	}
 	if err := datastar.ReadSignals(r, &signals); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -209,6 +212,12 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	q := clampQuery(signals.Q)
 	name := sanitize(q)
+	res := resultsWithLimit(q, signals.Limit)
+	if signals.Offset != 0 && (res == nil || signals.Offset < 12 || signals.Offset%12 != 0 ||
+		signals.Limit != signals.Offset+12 || signals.Limit > 200 || signals.Offset >= res.Count()) {
+		http.Error(w, "invalid expansion range", http.StatusBadRequest)
+		return
+	}
 
 	sse := datastar.NewSSE(w, r)
 	ctx := sse.Context()
@@ -220,9 +229,21 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1) Instantly: every row with a skeleton status, plus URL sync. Stable ids => morph, not re-create.
-	res := resultsWithLimit(q, signals.Limit)
-	sse.PatchElements(render("results", res))
+	rows := append(append([]Row{}, res.Top...), res.All...)
+	if signals.Offset == 0 {
+		// A new search replaces the results; an expansion leaves earlier rows untouched.
+		sse.PatchElements(render("results", res))
+	} else {
+		rows = rows[signals.Offset:]
+		// Remove only this batch before appending it, so reconnects cannot duplicate rows.
+		selectors := make([]string, 0, len(rows))
+		for _, row := range rows {
+			selectors = append(selectors, "#"+row.ID)
+		}
+		sse.PatchElements("", datastar.WithSelector(strings.Join(selectors, ",")), datastar.WithMode(datastar.ElementPatchModeRemove))
+		sse.PatchElements(render("rows", rows), datastar.WithSelector("#all-results"), datastar.WithMode(datastar.ElementPatchModeAppend))
+		sse.PatchElements(render("show-more", res))
+	}
 	values := url.Values{"q": {q}}
 	if signals.Limit > 12 && signals.Limit <= 200 {
 		values.Set("limit", strconv.Itoa(signals.Limit))
@@ -236,7 +257,6 @@ func searchHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	log.Printf("search %q start (active=%d)", name, n)
 
-	rows := append(append([]Row{}, res.Top...), res.All...)
 	var done atomic.Int32
 	var wg sync.WaitGroup
 	for _, row := range rows {
