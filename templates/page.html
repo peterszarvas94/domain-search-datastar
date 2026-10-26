@@ -20,8 +20,8 @@
              autocomplete="off" spellcheck="false" autofocus
              data-bind:q
              data-indicator="_searching"
-             data-on:input="$limit = 12; $_pending = $q.trim() != ''"
-             data-on:input__debounce.300ms="{{template "sync-url"}} $q.trim() && @get('/api/search')">
+             data-on:input="$limit = 12; $_pending = $q.trim() != ''; {{template "sync-url"}}"
+             data-on:input__debounce.300ms="$q.trim() && @get('/api/search')">
       <span class="spinner" data-show="$_searching || $_expanding" style="display:none" aria-hidden="true"></span>
     </form>
 
